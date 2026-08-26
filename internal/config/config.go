@@ -25,6 +25,7 @@ const (
 
 	configDirectory = "nm-jira"
 	configFilename  = "config.toml"
+	legacyConfigDirectory = "no-more-interfaz-jira"
 )
 
 var configKeys = []string{
@@ -69,10 +70,26 @@ func DefaultPath() (string, error) {
 	return filepath.Join(configDir, configDirectory, configFilename), nil
 }
 
+func legacyPath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolving user config directory: %w", err)
+	}
+	return filepath.Join(configDir, legacyConfigDirectory, configFilename), nil
+}
+
 func Load() (Config, error) {
 	configPath, err := DefaultPath()
 	if err != nil {
 		return Config{}, err
+	}
+	if _, err := os.Stat(configPath); errors.Is(err, os.ErrNotExist) {
+		configPath, err = legacyPath()
+		if err != nil {
+			return Config{}, err
+		}
+	} else if err != nil {
+		return Config{}, fmt.Errorf("stating config file %q: %w", configPath, err)
 	}
 
 	workingDir, err := os.Getwd()
@@ -238,17 +255,7 @@ func (c Config) Validate() error {
 }
 
 func (c Config) ValidateOAuthLogin() error {
-	if err := c.validateBaseURL(); err != nil {
-		return err
-	}
-	for key, value := range map[string]string{
-		EnvClientID: c.ClientID, EnvClientSecret: c.ClientSecret, EnvRedirectURI: c.RedirectURI,
-	} {
-		if strings.TrimSpace(value) == "" {
-			return requiredError(key)
-		}
-	}
-	return nil
+	return c.validateBaseURL()
 }
 
 func (c Config) ValidateBasicAuth() error {

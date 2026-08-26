@@ -22,7 +22,6 @@ type ClientConfig struct {
 	APIToken     string
 	ClientID     string
 	ClientSecret string
-	RedirectURI  string
 }
 
 var (
@@ -37,8 +36,11 @@ func NewClient(cfg ClientConfig) (*jira.Client, error) {
 		return nil, err
 	}
 	if session != nil {
-		oauthCfg := config.Config{BaseURL: cfg.BaseURL, ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURI: cfg.RedirectURI}
-		source := auth.NewPersistentTokenSource(oauthCfg, session)
+		oauthCfg := config.Config{BaseURL: cfg.BaseURL, ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret}
+		source, err := auth.NewPersistentTokenSource(oauthCfg, session)
+		if err != nil {
+			return nil, err
+		}
 		httpClient = oauth2.NewClient(context.Background(), source)
 		baseURL = fmt.Sprintf("https://api.atlassian.com/ex/jira/%s", session.CloudID)
 		return jira.NewClient(httpClient, baseURL)

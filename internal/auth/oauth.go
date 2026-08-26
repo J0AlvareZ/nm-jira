@@ -27,9 +27,15 @@ const (
 // tokenURL and resourceURL are variables (not constants) so tests can point
 // them at an httptest server without contacting the real Atlassian endpoints.
 var (
-	tokenURL    = "https://auth.atlassian.com/oauth/token"
-	resourceURL = "https://api.atlassian.com/oauth/token/accessible-resources"
+	tokenURL        = "https://auth.atlassian.com/oauth/token"
+	resourceURL     = "https://api.atlassian.com/oauth/token/accessible-resources"
+	redirectURI     = "http://127.0.0.1:8080/callback"
+	defaultClientID = "DDNNU9siRwp9fYyHbyyUOYaa4akQtjHa"
 )
+
+// EmbeddedClientSecret is injected for distribution builds with:
+// go build -ldflags "-X github.com/J0AlvareZ/no-more/nm-jira/internal/auth.EmbeddedClientSecret=<secret>"
+var EmbeddedClientSecret string
 
 type LoginOptions struct {
 	NoBrowser bool
@@ -41,15 +47,26 @@ type callbackResult struct {
 	Err  error
 }
 
-func OAuthConfig(cfg config.Config) *oauth2.Config {
-	return &oauth2.Config{ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: cfg.RedirectURI, Endpoint: oauth2.Endpoint{AuthURL: authorizeURL, TokenURL: tokenURL}, Scopes: strings.Fields(scopes)}
+func OAuthConfig(cfg config.Config) (*oauth2.Config, error) {
+	clientID := strings.TrimSpace(cfg.ClientID)
+	if clientID == "" {
+		clientID = defaultClientID
+	}
+	clientSecret := strings.TrimSpace(cfg.ClientSecret)
+	if clientSecret == "" {
+		clientSecret = strings.TrimSpace(EmbeddedClientSecret)
+	}
+	if clientSecret == "" {
+		return nil, fmt.Errorf("OAuth client secret is not configured; set JIRA_CLIENT_SECRET for development or use a distribution build with an embedded client secret")
+	}
+	return &oauth2.Config{ClientID: clientID, ClientSecret: clientSecret, RedirectURL: redirectURI, Endpoint: oauth2.Endpoint{AuthURL: authorizeURL, TokenURL: tokenURL}, Scopes: strings.Fields(scopes)}, nil
 }
 
 // authCodeURL builds the authorization URL for the 3LO code flow, including
 // the audience, scopes, state, consent prompt and PKCE S256 challenge.
-func authCodeURL(cfg config.Config, state, verifier string) string {
+func authCodeURL(oauthCfg *oauth2.Config, state, verifier string) string {
 	challenge := pkceChallenge(verifier)
-	return OAuthConfig(cfg).AuthCodeURL(state,
+	return oauthCfg.AuthCodeURL(state,
 		oauth2.SetAuthURLParam("audience", "api.atlassian.com"),
 		oauth2.SetAuthURLParam("prompt", "consent"),
 		oauth2.SetAuthURLParam("code_challenge", challenge),
@@ -61,7 +78,11 @@ func Login(ctx context.Context, cfg config.Config, options LoginOptions) (*Sessi
 	if err := cfg.ValidateOAuthLogin(); err != nil {
 		return nil, err
 	}
-	if err := validateLoopbackRedirect(cfg.RedirectURI); err != nil {
+	oauthCfg, err := OAuthConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateLoopbackRedirect(redirectURI); err != nil {
 		return nil, err
 	}
 	state, err := randomURLValue()
@@ -72,7 +93,7 @@ func Login(ctx context.Context, cfg config.Config, options LoginOptions) (*Sessi
 	if err != nil {
 		return nil, err
 	}
-	authURL := authCodeURL(cfg, state, verifier)
+	authURL := authCodeURL(oauthCfg, state, verifier)
 	output := options.Output
 	if output == nil {
 		output = io.Discard
@@ -83,7 +104,7 @@ func Login(ctx context.Context, cfg config.Config, options LoginOptions) (*Sessi
 	}
 	code := options.Code
 	if code == "" {
-		result, err := waitForCallback(ctx, cfg.RedirectURI, state)
+		result, err := waitForCallback(ctx, redirectURI, state)
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +113,6 @@ func Login(ctx context.Context, cfg config.Config, options LoginOptions) (*Sessi
 		}
 		code = result.Code
 	}
-	oauthCfg := OAuthConfig(cfg)
 	token, err := oauthCfg.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", verifier))
 	if err != nil {
 		return nil, fmt.Errorf("exchanging OAuth authorization code: %w", err)
@@ -111,11 +131,11 @@ func Login(ctx context.Context, cfg config.Config, options LoginOptions) (*Sessi
 func validateLoopbackRedirect(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("JIRA_REDIRECT_URI must be a loopback URL: %w", err)
+		return fmt.Errorf("OAuth loopback redirect must be a loopback URL: %w", err)
 	}
 	host := strings.Trim(u.Hostname(), "[]")
 	if u.Scheme != "http" || u.Port() == "" || u.Path == "" || (host != "localhost" && host != "127.0.0.1" && host != "::1") {
-		return fmt.Errorf("JIRA_REDIRECT_URI must be an http loopback URL with port and callback path")
+		return fmt.Errorf("OAuth loopback redirect must be an http loopback URL with port and callback path")
 	}
 	return nil
 }
@@ -215,9 +235,13 @@ type PersistentTokenSource struct {
 	session *Session
 }
 
-func NewPersistentTokenSource(cfg config.Config, session *Session) *PersistentTokenSource {
+func NewPersistentTokenSource(cfg config.Config, session *Session) (*PersistentTokenSource, error) {
+	oauthCfg, err := OAuthConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
 	token := &oauth2.Token{AccessToken: session.AccessToken, RefreshToken: session.RefreshToken, Expiry: session.Expiry}
-	return &PersistentTokenSource{source: OAuthConfig(cfg).TokenSource(context.Background(), token), session: session}
+	return &PersistentTokenSource{source: oauthCfg.TokenSource(context.Background(), token), session: session}, nil
 }
 
 func (p *PersistentTokenSource) Token() (*oauth2.Token, error) {

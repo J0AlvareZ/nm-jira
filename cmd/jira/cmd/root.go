@@ -24,16 +24,14 @@ var rootCmd = &cobra.Command{
 	Short: "Jira CLI for day-to-day issue actions",
 	Long: "A Go CLI that migrates the zsh jira helpers to a single binary.\n\n" +
 		"Configuration is loaded from config.toml at " +
-		"os.UserConfigDir()/no-more-interfaz-jira/config.toml, then .env in " +
+			"os.UserConfigDir()/nm-jira/config.toml, then .env in " +
 		"the current directory, then shell environment variables. Earlier " +
 		"sources win per key.\n\n" +
-		"OAuth login requires JIRA_BASE_URL, JIRA_CLIENT_ID, JIRA_CLIENT_SECRET, " +
-		"and JIRA_REDIRECT_URI. JIRA_API_TOKEN and JIRA_EMAIL remain available " +
-		"for Basic auth automation. Secrets are never printed.",
+		"Run jira setup to configure the Jira site and optional defaults, then sign in with OAuth.",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if isAuthCommand(cmd) {
+		if isAuthCommand(cmd) || cmd == setupCmd {
 			return nil
 		}
 		resolvedConfig, err := config.Load()
@@ -48,7 +46,6 @@ var rootCmd = &cobra.Command{
 			APIToken:     cfg.APIToken,
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
-			RedirectURI:  cfg.RedirectURI,
 		})
 		if err != nil {
 			return fmt.Errorf("building jira client: %w", err)
@@ -64,6 +61,7 @@ func init() {
 	rootCmd.AddCommand(workloadCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(authCmd)
+	rootCmd.AddCommand(setupCmd)
 	rootCmd.AddCommand(commentCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(editCmd)
