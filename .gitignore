@@ -1,0 +1,22 @@
+# Go and Taskfile generated artifacts
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local tool metadata
+.atl/
+.codegraph/
+
+# IDE and OS metadata
+.idea/
+.vscode/
+.DS_Store
+*~
+*.swp

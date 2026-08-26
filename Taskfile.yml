@@ -1,0 +1,18 @@
+version: '3'
+
+dotenv: ['.env']
+
+tasks:
+
+  default:
+    desc: Run the built binary
+    deps: [build]
+    cmds:
+      - ./bin/{{.APP_NAME}}
+
+  build:
+    desc: Build the binary
+    cmds:
+      - go build -o bin/{{.APP_NAME}} ./cmd/jira
+
+
