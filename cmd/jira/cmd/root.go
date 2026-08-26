@@ -64,11 +64,11 @@ func init() {
 	rootCmd.AddCommand(workloadCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(authCmd)
-	// rootCmd.AddCommand(commentCmd)
-	// rootCmd.AddCommand(statusCmd)
-	// rootCmd.AddCommand(editCmd)
-	// rootCmd.AddCommand(suppCmd)
-	// rootCmd.AddCommand(spCmd)
+	rootCmd.AddCommand(commentCmd)
+	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(editCmd)
+	rootCmd.AddCommand(suppCmd)
+	rootCmd.AddCommand(spCmd)
 }
 
 func isAuthCommand(cmd *cobra.Command) bool {
