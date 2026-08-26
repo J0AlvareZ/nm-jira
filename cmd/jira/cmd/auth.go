@@ -36,14 +36,14 @@ var (
 			return err
 		}
 		if session == nil {
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Authentication mode: Basic auth (no local OAuth session)")
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "OAuth session: not signed in (run jira auth login)")
 			return err
 		}
 		state := "valid"
 		if auth.SessionExpired(session) {
 			state = "expired"
 		}
-		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Authentication mode: OAuth\nSite: %s\nExpiry: %s\nStatus: %s\n", session.SiteURL, session.Expiry.Format(time.RFC3339), state)
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "OAuth session: %s\nSite: %s\nExpiry: %s\n", state, session.SiteURL, session.Expiry.Format(time.RFC3339))
 		return err
 	}}
 )

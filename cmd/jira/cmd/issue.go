@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -115,19 +114,6 @@ func runIssueCreate(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	if dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {
-		payload, err := json.Marshal(&jira.Issue{Fields: fields})
-		if err != nil {
-			return err
-		}
-		fmt.Printf(
-			"curl -s -u \"$JIRA_EMAIL:$JIRA_API_TOKEN\" -X POST %q -H \"Content-Type: application/json\" -d %s\n",
-			cfg.BaseURL+"/rest/api/3/issue",
-			payload,
-		)
-		return nil
 	}
 
 	created, _, err := client.Issue.Create(&jira.Issue{Fields: fields})

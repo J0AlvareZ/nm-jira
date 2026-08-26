@@ -42,8 +42,6 @@ var rootCmd = &cobra.Command{
 
 		c, err := jiraclient.NewClient(jiraclient.ClientConfig{
 			BaseURL:      cfg.BaseURL,
-			Email:        cfg.Email,
-			APIToken:     cfg.APIToken,
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
 		})
@@ -56,7 +54,6 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().Bool("dry-run", false, "print the curl request instead of executing the command")
 	rootCmd.AddCommand(issueCmd)
 	rootCmd.AddCommand(workloadCmd)
 	rootCmd.AddCommand(listCmd)

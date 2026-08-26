@@ -12,10 +12,7 @@ import (
 
 const sessionFilename = "oauth-session.json"
 
-const (
-	sessionDirectory       = "nm-jira"
-	legacySessionDirectory = "no-more-interfaz-jira"
-)
+const sessionDirectory = "nm-jira"
 
 type Session struct {
 	Version      int       `json:"version"`
@@ -33,19 +30,11 @@ func SessionPath() (string, error) {
 	return filepath.Join(dir, sessionDirectory, sessionFilename), nil
 }
 
-func legacySessionPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil { return "", fmt.Errorf("resolving user config directory: %w", err) }
-	return filepath.Join(dir, legacySessionDirectory, sessionFilename), nil
-}
-
 func LoadSession() (*Session, error) {
 	path, err := SessionPath(); if err != nil { return nil, err }
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
-		path, err = legacySessionPath(); if err != nil { return nil, err }
-		info, err = os.Stat(path)
-		if errors.Is(err, os.ErrNotExist) { return nil, nil }
+		return nil, nil
 	}
 	if err != nil { return nil, fmt.Errorf("stating OAuth session: %w", err) }
 	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 { return nil, fmt.Errorf("OAuth session %q has insecure permissions %04o; expected 0600", path, info.Mode().Perm()) }

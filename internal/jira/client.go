@@ -18,8 +18,6 @@ import (
 
 type ClientConfig struct {
 	BaseURL      string
-	Email        string
-	APIToken     string
 	ClientID     string
 	ClientSecret string
 }
@@ -29,32 +27,22 @@ var (
 	baseURL    string
 )
 
-// NewClient uses a persisted OAuth session when available, otherwise Basic auth.
+// NewClient uses a persisted OAuth session.
 func NewClient(cfg ClientConfig) (*jira.Client, error) {
 	session, err := auth.LoadSession()
 	if err != nil {
 		return nil, err
 	}
-	if session != nil {
-		oauthCfg := config.Config{BaseURL: cfg.BaseURL, ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret}
-		source, err := auth.NewPersistentTokenSource(oauthCfg, session)
-		if err != nil {
-			return nil, err
-		}
-		httpClient = oauth2.NewClient(context.Background(), source)
-		baseURL = fmt.Sprintf("https://api.atlassian.com/ex/jira/%s", session.CloudID)
-		return jira.NewClient(httpClient, baseURL)
+	if session == nil {
+		return nil, fmt.Errorf("no local OAuth session; run jira auth login")
 	}
-	if err := (config.Config{BaseURL: cfg.BaseURL, Email: cfg.Email, APIToken: cfg.APIToken}).ValidateBasicAuth(); err != nil {
+	oauthCfg := config.Config{BaseURL: cfg.BaseURL, ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret}
+	source, err := auth.NewPersistentTokenSource(oauthCfg, session)
+	if err != nil {
 		return nil, err
 	}
-	tp := jira.BasicAuthTransport{
-		Username: cfg.Email,
-		Password: cfg.APIToken,
-	}
-	httpClient = tp.Client()
-	baseURL = cfg.BaseURL
-
+	httpClient = oauth2.NewClient(context.Background(), source)
+	baseURL = fmt.Sprintf("https://api.atlassian.com/ex/jira/%s", session.CloudID)
 	return jira.NewClient(httpClient, baseURL)
 }
 
