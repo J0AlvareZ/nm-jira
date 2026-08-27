@@ -49,12 +49,21 @@ type fileConfig struct {
 }
 
 func DefaultPath() (string, error) {
+	configDir, err := ConfigDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(configDir, configFilename), nil
+}
+
+func ConfigDir() (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolving user config directory: %w", err)
 	}
 
-	return filepath.Join(configDir, configDirectory, configFilename), nil
+	return filepath.Join(configDir, configDirectory), nil
 }
 
 func Load() (Config, error) {

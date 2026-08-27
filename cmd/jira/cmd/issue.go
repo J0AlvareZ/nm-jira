@@ -4,20 +4,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/spf13/cobra"
 
+	"github.com/J0AlvareZ/no-more/nm-jira/internal/config"
 	jiraclient "github.com/J0AlvareZ/no-more/nm-jira/internal/jira"
 	jira "github.com/andygrunwald/go-jira"
 )
 
 const (
-	defaultLabel    = "Support"
-	defaultType     = "Task"
-	defaultTemplate = "chore"
+	defaultLabel = "Support"
+	defaultType  = "Task"
 )
+
+type editTemplateFunc func(initial string) (string, error)
 
 var issueCmd = &cobra.Command{
 	Use:   "issue",
@@ -43,7 +46,7 @@ func init() {
 		"",
 		"assignee (accountId, email, or legacy name; defaults to DEFAULT_USER for DEFAULT_PROJECT)",
 	)
-	f.String("template", defaultTemplate, "template name under $DOTFILES/templates/work/")
+	f.String("template", "", "template name under the user config templates directory")
 	f.String("story-points", "1", "story point estimate (MRI only)")
 	f.String("story-points-dev", "1", "story points desarrollo (MRI only)")
 	f.String("type", defaultType, "issue type name")
@@ -72,7 +75,6 @@ func runIssueCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	issueType, _ := cmd.Flags().GetString("type")
-	templateName, _ := cmd.Flags().GetString("template")
 	storyPoints, _ := cmd.Flags().GetString("story-points")
 	storyPointsDev, _ := cmd.Flags().GetString("story-points-dev")
 	labels, _ := cmd.Flags().GetStringSlice("label")
@@ -82,7 +84,7 @@ func runIssueCreate(cmd *cobra.Command, args []string) error {
 		labels = []string{defaultLabel}
 	}
 
-	description, err := readTemplate(templateName)
+	description, err := resolveIssueDescription(cmd, config.ConfigDir, openInEditor)
 	if err != nil {
 		return err
 	}
@@ -124,30 +126,91 @@ func runIssueCreate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func readTemplate(name string) (string, error) {
-	filename := templateFilename(name)
-	dotfiles := os.Getenv("DOTFILES")
-	if dotfiles == "" {
-		home, _ := os.UserHomeDir()
-		dotfiles = filepath.Join(home, "dotfiles")
+func validateTemplateName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("template name must not be empty")
 	}
-	path := filepath.Join(dotfiles, "templates", "work", filename)
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("reading template %s: %w", path, err)
+	if strings.ContainsAny(name, `/\\`) {
+		return fmt.Errorf("template name %q must not contain path separators", name)
 	}
-	return string(b), nil
+	if strings.EqualFold(filepath.Ext(name), ".md") {
+		return fmt.Errorf("template name %q must not include the .md extension", name)
+	}
+	return nil
 }
 
-// templateFilename mirrors shortcuts::jira::templates: every name resolves to
-// chore.md. Kept as a switch so extra templates can be wired later.
-func templateFilename(name string) string {
-	switch name {
-	case "chore":
-		return "chore.md"
-	default:
-		return "chore.md"
+func templateDirectory(configDir string) string {
+	return filepath.Join(configDir, "templates")
+}
+
+func availableTemplateNames(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
 	}
+
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func resolveTemplateDescription(name, templatesDir string, edit editTemplateFunc) (string, error) {
+	if err := validateTemplateName(name); err != nil {
+		return "", err
+	}
+
+	available, err := availableTemplateNames(templatesDir)
+	if err != nil {
+		return "", fmt.Errorf(
+			"template %q is unavailable: cannot read templates directory %q; available templates: none: %w",
+			name,
+			templatesDir,
+			err,
+		)
+	}
+	if len(available) == 0 {
+		return "", fmt.Errorf(
+			"template %q is unavailable: templates directory %q has no .md templates; available templates: none",
+			name,
+			templatesDir,
+		)
+	}
+
+	path := filepath.Join(templatesDir, name+".md")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf(
+			"template %q not found at %q; available templates: %s",
+			name,
+			path,
+			strings.Join(available, ", "),
+		)
+	}
+
+	return edit(string(contents))
+}
+
+func resolveIssueDescription(
+	cmd *cobra.Command,
+	configDir func() (string, error),
+	edit editTemplateFunc,
+) (string, error) {
+	if !cmd.Flags().Changed("template") {
+		return "", nil
+	}
+
+	name, _ := cmd.Flags().GetString("template")
+	dir, err := configDir()
+	if err != nil {
+		return "", err
+	}
+
+	return resolveTemplateDescription(name, templateDirectory(dir), edit)
 }
 
 func mriStoryPoints(estimate, dev string) (map[string]interface{}, error) {
