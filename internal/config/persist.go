@@ -40,9 +40,9 @@ func Save(cfg Config) error {
 		return fmt.Errorf("creating temporary configuration file: %w", err)
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("securing temporary configuration file: %w", err)
 	}
 	persisted := oauthFileConfig{
@@ -51,7 +51,7 @@ func Save(cfg Config) error {
 		DefaultUser:    cfg.DefaultUser,
 	}
 	if err := toml.NewEncoder(tmp).Encode(persisted); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("encoding configuration: %w", err)
 	}
 	if err := tmp.Close(); err != nil {

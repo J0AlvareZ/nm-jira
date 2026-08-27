@@ -19,10 +19,10 @@ func openInEditor(initial string) (string, error) {
 	}
 
 	path := f.Name()
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	if _, err := f.WriteString(initial); err != nil {
-		f.Close()
+		_ = f.Close()
 		return "", err
 	}
 

@@ -130,12 +130,14 @@ func loadTOML(path string, warningWriter io.Writer) (map[string]string, error) {
 	}
 
 	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
-		fmt.Fprintf(
+		if _, err := fmt.Fprintf(
 			warningWriter,
 			"warning: config file %q has permissions %04o; expected 0600 because it may contain sensitive OAuth settings\n",
 			path,
 			info.Mode().Perm(),
-		)
+		); err != nil {
+			return nil, fmt.Errorf("writing configuration permission warning: %w", err)
+		}
 	}
 
 	var decoded fileConfig

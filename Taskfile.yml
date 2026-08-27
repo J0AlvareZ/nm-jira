@@ -17,3 +17,8 @@ tasks:
     desc: Build the binary
     cmds:
       - go build -o bin/{{.APP_NAME}} ./cmd/jira
+
+  lint:
+    desc: Run static analysis
+    cmds:
+      - golangci-lint run ./...

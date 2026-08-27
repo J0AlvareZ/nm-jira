@@ -288,7 +288,7 @@ func isAccountID(ref string) bool {
 		return false
 	}
 	for _, r := range ref {
-		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == ':') {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' && r != '_' && r != ':' {
 			return false
 		}
 	}

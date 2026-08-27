@@ -98,7 +98,9 @@ func Login(ctx context.Context, cfg config.Config, options LoginOptions) (*Sessi
 	if output == nil {
 		output = io.Discard
 	}
-	fmt.Fprintf(output, "Open this URL to authorize Jira CLI:\n%s\n", authURL)
+	if _, err := fmt.Fprintf(output, "Open this URL to authorize Jira CLI:\n%s\n", authURL); err != nil {
+		return nil, fmt.Errorf("writing authorization URL: %w", err)
+	}
 	if !options.NoBrowser {
 		_ = OpenBrowser(authURL)
 	}
@@ -146,7 +148,7 @@ func waitForCallback(ctx context.Context, redirectURI, expectedState string) (ca
 	if err != nil {
 		return callbackResult{}, fmt.Errorf("listening for OAuth callback: %w", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	result := make(chan callbackResult, 1)
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != u.Path {
@@ -170,10 +172,10 @@ func waitForCallback(ctx context.Context, redirectURI, expectedState string) (ca
 			return
 		}
 		result <- callbackResult{Code: code}
-		fmt.Fprintln(w, "Authorization complete. You can return to the terminal.")
+		_, _ = fmt.Fprintln(w, "Authorization complete. You can return to the terminal.")
 	})}
-	go server.Serve(listener)
-	defer server.Close()
+	go func() { _ = server.Serve(listener) }()
+	defer func() { _ = server.Close() }()
 	select {
 	case r := <-result:
 		return r, nil
@@ -192,7 +194,7 @@ func selectResource(ctx context.Context, client *http.Client, accessToken, baseU
 	if err != nil {
 		return "", "", fmt.Errorf("loading accessible Jira resources: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return "", "", fmt.Errorf("loading accessible Jira resources: status %d", resp.StatusCode)
 	}

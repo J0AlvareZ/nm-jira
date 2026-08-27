@@ -53,9 +53,9 @@ func SaveSession(session Session) error {
 	data, err := json.MarshalIndent(session, "", "  "); if err != nil { return fmt.Errorf("encoding OAuth session: %w", err) }
 	tmp, err := os.CreateTemp(dir, ".oauth-session-*"); if err != nil { return fmt.Errorf("creating OAuth session temp file: %w", err) }
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if err := tmp.Chmod(0o600); err != nil { tmp.Close(); return fmt.Errorf("securing OAuth session temp file: %w", err) }
-	if _, err := tmp.Write(data); err != nil { tmp.Close(); return fmt.Errorf("writing OAuth session: %w", err) }
+	defer func() { _ = os.Remove(tmpName) }()
+	if err := tmp.Chmod(0o600); err != nil { _ = tmp.Close(); return fmt.Errorf("securing OAuth session temp file: %w", err) }
+	if _, err := tmp.Write(data); err != nil { _ = tmp.Close(); return fmt.Errorf("writing OAuth session: %w", err) }
 	if err := tmp.Close(); err != nil { return fmt.Errorf("closing OAuth session: %w", err) }
 	if err := os.Rename(tmpName, path); err != nil { return fmt.Errorf("persisting OAuth session: %w", err) }
 	return nil
