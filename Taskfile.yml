@@ -1,7 +1,7 @@
 version: '3'
 
 env:
-  APP_NAME: nm:jira
+  APP_NAME: nm-jira
 
 dotenv: ['.env']
 

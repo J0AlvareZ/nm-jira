@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      version: ${{ steps.metadata.outputs.version }}
+      commit: ${{ steps.metadata.outputs.commit }}
+      date: ${{ steps.metadata.outputs.date }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: metadata
+        name: Validate SemVer and generate metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          semver_regex='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|([0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))(\.((0|[1-9][0-9]*)|([0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          if ! [[ "$tag" =~ $semver_regex ]]; then
+            echo "Invalid release tag: $tag"
+            echo "Expected strict SemVer, for example:
+              v1.2.3 or v1.2.3-rc.1"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+  matrix:
+    name: Release ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive: tar.gz
+          - goos: linux
+            goarch: arm64
+            archive: tar.gz
+          - goos: darwin
+            goarch: amd64
+            archive: tar.gz
+          - goos: darwin
+            goarch: arm64
+            archive: tar.gz
+          - goos: windows
+            goarch: amd64
+            archive: zip
+          - goos: windows
+            goarch: arm64
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build release binary
+        env:
+          JIRA_OAUTH_CLIENT_SECRET: ${{ secrets.JIRA_OAUTH_CLIENT_SECRET }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          COMMIT: ${{ needs.validate.outputs.commit }}
+          DATE: ${{ needs.validate.outputs.date }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/package
+          extension=""
+          if [ "$GOOS" = "windows" ]; then
+            extension=".exe"
+          fi
+          ldflags=(
+            "-X github.com/J0AlvareZ/no-more/nm-jira/cmd/jira/cmd.version=${VERSION}"
+            "-X github.com/J0AlvareZ/no-more/nm-jira/cmd/jira/cmd.commit=${COMMIT}"
+            "-X github.com/J0AlvareZ/no-more/nm-jira/cmd/jira/cmd.date=${DATE}"
+            "-X github.com/J0AlvareZ/no-more/nm-jira/internal/auth.EmbeddedClientSecret=${JIRA_OAUTH_CLIENT_SECRET}"
+          )
+          go build \
+            -trimpath \
+            -ldflags "${ldflags[*]}" \
+            -o "dist/package/nm-jira${extension}" \
+            ./cmd/jira
+      - name: Package archive
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ARCHIVE: ${{ matrix.archive }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive_name="nm-jira_${GOOS}_${GOARCH}.${ARCHIVE}"
+          if [ "$ARCHIVE" = "zip" ]; then
+            (
+              cd dist/package
+              zip "../${archive_name}" "nm-jira.exe"
+            )
+          else
+            tar -C dist/package -czf "dist/${archive_name}" nm-jira
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/nm-jira_${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
+          if-no-files-found: error
+  final:
+    name: Publish GitHub release
+    needs:
+      - validate
+      - matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-artifacts
+          sha256sum nm-jira_* > SHA256SUMS
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --title "nm-jira $VERSION" \
+            --notes "Release $TAG." \
+            release-artifacts/nm-jira_* \
+            release-artifacts/SHA256SUMS
+

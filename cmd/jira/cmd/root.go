@@ -19,12 +19,18 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 var rootCmd = &cobra.Command{
-	Use:   "jira",
+	Use:   "nm-jira",
 	Short: "Jira CLI for day-to-day issue actions",
 	Long: "A Go CLI that migrates the zsh jira helpers to a single binary.\n\n" +
 		"Configuration is loaded from config.toml at " +
-			"os.UserConfigDir()/nm-jira/config.toml, then .env in " +
+		"os.UserConfigDir()/nm-jira/config.toml, then .env in " +
 		"the current directory, then shell environment variables. Earlier " +
 		"sources win per key.\n\n" +
 		"Run jira setup to configure the Jira site and optional defaults, then sign in with OAuth.",
@@ -54,6 +60,10 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.Version = version
+	rootCmd.SetVersionTemplate(
+		fmt.Sprintf("nm-jira version {{.Version}} (commit %s built %s)\n", commit, date),
+	)
 	rootCmd.AddCommand(issueCmd)
 	rootCmd.AddCommand(workloadCmd)
 	rootCmd.AddCommand(listCmd)
