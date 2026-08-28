@@ -84,5 +84,5 @@ jobs:
           fi
           go build \
             -o "$RUNNER_TEMP/nm-jira-${GOOS}-${GOARCH}${extension}" \
-          .cmd/jira
+          ./cmd/jira
 
