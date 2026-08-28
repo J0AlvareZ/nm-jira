@@ -140,12 +140,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
           VERSION: ${{ needs.validate.outputs.version }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
+
           gh release create "$TAG" \
+            --repo "$GH_REPO" \
             --title "nm-jira $VERSION" \
             --notes "Release $TAG." \
             release-artifacts/nm-jira_* \
             release-artifacts/SHA256SUMS
-
