@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -112,15 +115,23 @@ func runIssueCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	if project == "MRI" {
-		fields.Unknowns, err = mriStoryPoints(storyPoints, storyPointsDev)
+		estimate, err := parseStoryPoints("--story-points", storyPoints)
+		if err != nil {
+			return err
+		}
+		dev, err := parseStoryPoints("--story-points-dev", storyPointsDev)
+		if err != nil {
+			return err
+		}
+		fields.Unknowns, err = mriStoryPoints(estimate, dev)
 		if err != nil {
 			return err
 		}
 	}
 
-	created, _, err := client.Issue.Create(&jira.Issue{Fields: fields})
+	created, resp, err := client.Issue.Create(&jira.Issue{Fields: fields})
 	if err != nil {
-		return err
+		return createIssueError(resp, err)
 	}
 	fmt.Printf("Created %s: %s\n", created.Key, created.Fields.Summary)
 	return nil
@@ -213,7 +224,19 @@ func resolveIssueDescription(
 	return resolveTemplateDescription(name, templateDirectory(dir), edit)
 }
 
-func mriStoryPoints(estimate, dev string) (map[string]interface{}, error) {
+func parseStoryPoints(flag, value string) (int, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, fmt.Errorf("%s must be a non-negative integer (0, 1, 2, ...); got empty value", flag)
+	}
+	n, err := strconv.Atoi(trimmed)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer (0, 1, 2, ...); got %q", flag, value)
+	}
+	return n, nil
+}
+
+func mriStoryPoints(estimate, dev int) (map[string]interface{}, error) {
 	estID, err := resolveCustomFieldID("story-point-estimate")
 	if err != nil {
 		return nil, err
@@ -226,6 +249,47 @@ func mriStoryPoints(estimate, dev string) (map[string]interface{}, error) {
 		estID: estimate,
 		devID: dev,
 	}, nil
+}
+
+// createIssueError builds a safe creation error message from Jira's structured
+// error response. It extracts only the "errorMessages" and "errors" fields and
+// never exposes the raw response body, tokens, Authorization, payload, summary,
+// or accountId. When the response is missing or not structured JSON, it falls
+// back to the original error, which only contains the HTTP status code.
+func createIssueError(resp *jira.Response, err error) error {
+	if resp == nil || resp.Body == nil {
+		return fmt.Errorf("creating issue: %w", err)
+	}
+
+	body, readErr := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if readErr != nil {
+		return fmt.Errorf("creating issue: %w", err)
+	}
+
+	var structured struct {
+		ErrorMessages []string          `json:"errorMessages"`
+		Errors        map[string]string `json:"errors"`
+	}
+	if json.Unmarshal(body, &structured) != nil {
+		return fmt.Errorf("creating issue: %w", err)
+	}
+
+	details := make([]string, 0, len(structured.ErrorMessages)+len(structured.Errors))
+	details = append(details, structured.ErrorMessages...)
+	keys := make([]string, 0, len(structured.Errors))
+	for k := range structured.Errors {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		details = append(details, fmt.Sprintf("%s: %s", k, structured.Errors[k]))
+	}
+
+	if len(details) == 0 {
+		return fmt.Errorf("creating issue: %w", err)
+	}
+	return fmt.Errorf("creating issue (status %d): %s", resp.StatusCode, strings.Join(details, "; "))
 }
 
 func dedupeLabels(in []string) []string {
