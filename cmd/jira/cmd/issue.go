@@ -87,7 +87,9 @@ func runIssueCreate(cmd *cobra.Command, args []string) error {
 		labels = []string{defaultLabel}
 	}
 
-	description, err := resolveIssueDescription(cmd, config.ConfigDir, openInEditor)
+	description, err := resolveIssueDescription(cmd, config.ConfigDir, func(initial string) (string, error) {
+		return openInEditor(cfg.Editor, initial)
+	})
 	if err != nil {
 		return err
 	}
@@ -133,6 +135,15 @@ func runIssueCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return createIssueError(resp, err)
 	}
+
+	if created == nil {
+		return fmt.Errorf("creating issue: Jira returned an empty response")
+	}
+
+	if created.Key == "" {
+		return fmt.Errorf("creating issue: Jira response did not include an issue key")
+	}
+
 	fmt.Printf("Created %s: %s\n", created.Key, created.Fields.Summary)
 	return nil
 }

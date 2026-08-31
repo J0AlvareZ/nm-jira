@@ -28,7 +28,7 @@ var statusCmd = &cobra.Command{
 
 func runStatus(cmd *cobra.Command, args []string) error {
 	issueKey := args[0]
-	target := strings.TrimSpace(strings.TrimPrefix(args[1], "To "))
+	target := strings.TrimSpace(args[1])
 
 	issue, _, err := client.Issue.Get(issueKey, nil)
 	if err != nil {
@@ -57,7 +57,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	for i := currentIdx + 1; i <= targetIdx; i++ {
 		next := workflowStates[i]
-		transitionName := "To " + next
+		transitionName := next
+
+		fmt.Printf("moving to %q\n", transitionName)
+
 		if err := doTransition(issueKey, transitionName); err != nil {
 			return fmt.Errorf("moving to %q: %w", transitionName, err)
 		}

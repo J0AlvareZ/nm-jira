@@ -7,8 +7,7 @@ import (
 	"os/exec"
 )
 
-func openInEditor(initial string) (string, error) {
-	editor := os.Getenv("EDITOR")
+func openInEditor(editor, initial string) (string, error) {
 	if editor == "" {
 		editor = "nano"
 	}
@@ -30,7 +29,7 @@ func openInEditor(initial string) (string, error) {
 		return "", err
 	}
 
-	c := exec.Command("sh", "-c", editor+"\"$@\"", "sh", path)
+	c := exec.Command(editor, path)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr

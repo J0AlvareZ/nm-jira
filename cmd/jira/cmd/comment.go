@@ -24,7 +24,7 @@ func runComment(cmd *cobra.Command, args []string) error {
 		body = args[1]
 	} else {
 		var err error
-		body, err = openInEditor("")
+		body, err = openInEditor(cfg.Editor, "")
 		if err != nil {
 			return err
 		}

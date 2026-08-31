@@ -21,7 +21,7 @@ import (
 
 const (
 	authorizeURL = "https://auth.atlassian.com/authorize"
-	scopes       = "read:jira-work write:jira-work offline_access"
+	scopes       = "read:jira-work write:jira-work read:jira-user offline_access"
 )
 
 // tokenURL and resourceURL are variables (not constants) so tests can point
@@ -66,7 +66,8 @@ func OAuthConfig(cfg config.Config) (*oauth2.Config, error) {
 // the audience, scopes, state, consent prompt and PKCE S256 challenge.
 func authCodeURL(oauthCfg *oauth2.Config, state, verifier string) string {
 	challenge := pkceChallenge(verifier)
-	return oauthCfg.AuthCodeURL(state,
+	return oauthCfg.AuthCodeURL(
+		state,
 		oauth2.SetAuthURLParam("audience", "api.atlassian.com"),
 		oauth2.SetAuthURLParam("prompt", "consent"),
 		oauth2.SetAuthURLParam("code_challenge", challenge),

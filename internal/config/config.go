@@ -19,6 +19,7 @@ const (
 	EnvDefaultUser    = "DEFAULT_USER"
 	EnvClientID       = "JIRA_CLIENT_ID"
 	EnvClientSecret   = "JIRA_CLIENT_SECRET"
+	EnvEditor         = "EDITOR"
 
 	configDirectory = "nm-jira"
 	configFilename  = "config.toml"
@@ -38,6 +39,7 @@ type Config struct {
 	DefaultUser    string `toml:"DEFAULT_USER"`
 	ClientID       string `toml:"JIRA_CLIENT_ID"`
 	ClientSecret   string `toml:"JIRA_CLIENT_SECRET"`
+	Editor         string `toml:"EDITOR"`
 }
 
 type fileConfig struct {
@@ -46,6 +48,7 @@ type fileConfig struct {
 	DefaultUser    *string `toml:"DEFAULT_USER"`
 	ClientID       *string `toml:"JIRA_CLIENT_ID"`
 	ClientSecret   *string `toml:"JIRA_CLIENT_SECRET"`
+	Editor         *string `toml:"EDITOR"`
 }
 
 func DefaultPath() (string, error) {
@@ -117,6 +120,14 @@ func loadWithSources(
 		ClientID:       values[EnvClientID],
 		ClientSecret:   values[EnvClientSecret],
 	}
+
+	editor := strings.TrimSpace(fileValues["EDITOR"])
+	if editor == "" {
+		editor = "nano"
+	}
+
+	cfg.Editor = editor
+
 	return cfg, nil
 }
 
@@ -174,6 +185,9 @@ func loadTOML(path string, warningWriter io.Writer) (map[string]string, error) {
 	}
 	if decoded.ClientSecret != nil {
 		values[EnvClientSecret] = *decoded.ClientSecret
+	}
+	if decoded.Editor != nil {
+		values[EnvEditor] = *decoded.Editor
 	}
 	return values, nil
 }
@@ -249,7 +263,8 @@ func (c Config) validateBaseURL() error {
 	if !parsedURL.IsAbs() || parsedURL.Host == "" ||
 		(parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
 		return fmt.Errorf(
-			"%s must be an absolute http or https URL", EnvBaseURL)
+			"%s must be an absolute http or https URL", EnvBaseURL,
+		)
 	}
 
 	return nil

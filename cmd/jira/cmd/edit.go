@@ -26,7 +26,7 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting issue %s: %w", issueKey, err)
 	}
 
-	edited, err := openInEditor(issueToEditor(issue))
+	edited, err := openInEditor(cfg.Editor, issueToEditor(issue))
 	if err != nil {
 		return err
 	}
@@ -34,6 +34,10 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	fields, err := parseEditor(edited)
 	if err != nil {
 		return err
+	}
+
+	if issue.Fields.Assignee != nil {
+		fields.Assignee = issue.Fields.Assignee
 	}
 
 	update := &jira.Issue{
@@ -67,7 +71,15 @@ func issueToEditor(issue *jira.Issue) string {
 
 	assignee := ""
 	if f.Assignee != nil {
-		assignee = f.Assignee.DisplayName
+		switch {
+		case f.Assignee.DisplayName != "":
+			assignee = f.Assignee.DisplayName
+		case f.Assignee.AccountID != "":
+			assignee = f.Assignee.AccountID
+		case f.Assignee.Name != "":
+			assignee = f.Assignee.Name
+
+		}
 	}
 	fmt.Fprintf(&b, "assignee: %s\n", assignee)
 

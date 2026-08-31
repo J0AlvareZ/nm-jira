@@ -13,6 +13,7 @@ type oauthFileConfig struct {
 	BaseURL        string `toml:"JIRA_BASE_URL"`
 	DefaultProject string `toml:"DEFAULT_PROJECT,omitempty"`
 	DefaultUser    string `toml:"DEFAULT_USER,omitempty"`
+	Editor         string `toml:"EDITOR,omitempty"`
 }
 
 // Save validates and atomically persists interactive configuration to the canonical path.
@@ -49,6 +50,7 @@ func Save(cfg Config) error {
 		BaseURL:        cfg.BaseURL,
 		DefaultProject: cfg.DefaultProject,
 		DefaultUser:    cfg.DefaultUser,
+		Editor:         cfg.Editor,
 	}
 	if err := toml.NewEncoder(tmp).Encode(persisted); err != nil {
 		_ = tmp.Close()
