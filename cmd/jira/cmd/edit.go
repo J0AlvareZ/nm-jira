@@ -19,7 +19,10 @@ var editCmd = &cobra.Command{
 }
 
 func runEdit(cmd *cobra.Command, args []string) error {
-	issueKey := args[0]
+	issueKey, err := resolveIssueKey(args[0], cfg.DefaultProject)
+	if err != nil {
+		return err
+	}
 
 	issue, _, err := client.Issue.Get(issueKey, nil)
 	if err != nil {

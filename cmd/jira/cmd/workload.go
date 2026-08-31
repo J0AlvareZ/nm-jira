@@ -21,7 +21,10 @@ func init() {
 }
 
 func runWorkload(cmd *cobra.Command, args []string) error {
-	issueKey := args[0]
+	issueKey, err := resolveIssueKey(args[0], cfg.DefaultProject)
+	if err != nil {
+		return err
+	}
 	rawDuration := args[1]
 	comment, _ := cmd.Flags().GetString("comment")
 

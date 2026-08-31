@@ -27,7 +27,10 @@ var statusCmd = &cobra.Command{
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	issueKey := args[0]
+	issueKey, err := resolveIssueKey(args[0], cfg.DefaultProject)
+	if err != nil {
+		return err
+	}
 	target := strings.TrimSpace(args[1])
 
 	issue, _, err := client.Issue.Get(issueKey, nil)
@@ -67,7 +70,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	fmt.Printf("%s is now %q\n", issueKey, "To "+target)
+	fmt.Printf("%s is now %q\n", issueKey, target)
 	return nil
 }
 

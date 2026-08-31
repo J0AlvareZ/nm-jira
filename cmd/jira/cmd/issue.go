@@ -144,7 +144,7 @@ func runIssueCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating issue: Jira response did not include an issue key")
 	}
 
-	fmt.Printf("Created %s: %s\n", created.Key, created.Fields.Summary)
+	fmt.Printf("Created %s: %s\n", created.Key, summary)
 	return nil
 }
 

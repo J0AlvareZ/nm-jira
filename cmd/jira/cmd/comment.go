@@ -17,7 +17,10 @@ var commentCmd = &cobra.Command{
 }
 
 func runComment(cmd *cobra.Command, args []string) error {
-	issueKey := args[0]
+	issueKey, err := resolveIssueKey(args[0], cfg.DefaultProject)
+	if err != nil {
+		return err
+	}
 
 	var body string
 	if len(args) > 1 {
