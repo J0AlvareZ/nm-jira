@@ -2,6 +2,7 @@ version: '3'
 
 env:
   APP_NAME: nm-jira
+  INSTALL_DIR: "{{.HOME}}/.local/bin"
 
 dotenv: ['.env']
 
@@ -22,3 +23,11 @@ tasks:
     desc: Run static analysis
     cmds:
       - golangci-lint run ./...
+
+  install:
+    desc: Install the binary for the current user
+    deps: [default]
+    cmds:
+      - mkdir -p "{{.INSTALL_DIR}}"
+      - install -m 755 "bin/{{.APP_NAME}}" "{{.INSTALL_DIR}}/{{.APP_NAME}}"
+      - echo "Installed {{.APP_NAME}} in {{.INSTALL_DIR}}"

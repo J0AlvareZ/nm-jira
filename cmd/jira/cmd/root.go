@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -15,7 +16,7 @@ var (
 	cfg    config.Config
 )
 
-func Execute() error {
+func Execute(ctx context.Context) error {
 	return rootCmd.Execute()
 }
 
@@ -37,13 +38,19 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if isAuthCommand(cmd) || cmd == setupCmd {
+		if isAuthCommand(cmd) ||
+			cmd == setupCmd ||
+			cmd == completionCmd ||
+			cmd.Name() == "__complete" ||
+			cmd.Name() == "__completeNoDesc" {
 			return nil
 		}
+
 		resolvedConfig, err := config.Load()
 		if err != nil {
 			return fmt.Errorf("loading configuration: %w", err)
 		}
+
 		cfg = resolvedConfig
 
 		c, err := jiraclient.NewClient(jiraclient.ClientConfig{
@@ -54,6 +61,7 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("building jira client: %w", err)
 		}
+
 		client = c
 		return nil
 	},
@@ -64,6 +72,7 @@ func init() {
 	rootCmd.SetVersionTemplate(
 		fmt.Sprintf("nm-jira version {{.Version}} (commit %s built %s)\n", commit, date),
 	)
+	rootCmd.AddCommand(completionCmd)
 	rootCmd.AddCommand(issueCmd)
 	rootCmd.AddCommand(workloadCmd)
 	rootCmd.AddCommand(listCmd)

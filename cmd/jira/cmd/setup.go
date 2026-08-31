@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -56,7 +55,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	noBrowser, _ := cmd.Flags().GetBool("no-browser")
 	code, _ := cmd.Flags().GetString("code")
-	if _, err := auth.Login(context.Background(), resolvedCfg, auth.LoginOptions{NoBrowser: noBrowser, Code: code, Output: cmd.OutOrStdout()}); err != nil {
+	if _, err := auth.Login(cmd.Context(), resolvedCfg, auth.LoginOptions{NoBrowser: noBrowser, Code: code, Output: cmd.OutOrStdout()}); err != nil {
 		return fmt.Errorf("OAuth login failed after saving configuration: %w\nRetry with jira auth login", err)
 	}
 	return nil

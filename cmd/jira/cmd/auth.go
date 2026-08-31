@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -21,7 +20,7 @@ var authLoginCmd = &cobra.Command{
 		}
 		noBrowser, _ := cmd.Flags().GetBool("no-browser")
 		code, _ := cmd.Flags().GetString("code")
-		if _, err := auth.Login(context.Background(), cfg, auth.LoginOptions{NoBrowser: noBrowser, Code: code, Output: cmd.OutOrStdout()}); err != nil {
+		if _, err := auth.Login(cmd.Context(), cfg, auth.LoginOptions{NoBrowser: noBrowser, Code: code, Output: cmd.OutOrStdout()}); err != nil {
 			return err
 		}
 		return nil
