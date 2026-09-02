@@ -25,6 +25,7 @@ var listSprintCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().StringP("status", "s", "", "filter by status")
 	listCmd.Flags().StringP("label", "l", "", "filter by label")
+	listCmd.Flags().StringP("epic", "e", "", "filter by epic key")
 	listCmd.AddCommand(listSprintCmd)
 	listSprintCmd.Flags().String(
 		"name",
@@ -48,6 +49,7 @@ func init() {
 func runList(cmd *cobra.Command, args []string) error {
 	status, _ := cmd.Flags().GetString("status")
 	label, _ := cmd.Flags().GetString("label")
+	epic, _ := cmd.Flags().GetString("epic")
 
 	jql := "assignee = currentUser()"
 	if status != "" {
@@ -55,6 +57,13 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 	if label != "" {
 		jql += fmt.Sprintf(" AND labels = %q", label)
+	}
+	if epic != "" {
+		epic, err := resolveIssueKey(epic, cfg.DefaultProject)
+		if err != nil {
+			return err
+		}
+		jql += fmt.Sprintf(" AND parent = %q", epic)
 	}
 
 	issues, err := jiraclient.SearchJQL(jql, 100)
