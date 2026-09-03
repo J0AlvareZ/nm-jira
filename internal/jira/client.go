@@ -9,12 +9,28 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/J0AlvareZ/no-more/nm-jira/internal/auth"
 	"github.com/J0AlvareZ/no-more/nm-jira/internal/config"
 	jira "github.com/andygrunwald/go-jira"
 	"golang.org/x/oauth2"
 )
+
+// WorklogEntry is a worklog together with the issue data needed for reports.
+type WorklogEntry struct {
+	Started          time.Time
+	IssueKey         string
+	IssueSummary     string
+	TimeSpentSeconds int
+}
+
+// WorklogSearchResult contains the worklogs that could be retrieved. Errors
+// are per issue so callers can still present the successfully retrieved data.
+type WorklogSearchResult struct {
+	Entries []WorklogEntry
+	Errors  []error
+}
 
 type ClientConfig struct {
 	BaseURL      string
@@ -78,6 +94,130 @@ func SearchJQL(jql string, maxResults int) ([]jira.Issue, error) {
 		issues = append(issues, *issue)
 	}
 	return issues, nil
+}
+
+// SearchWorklogs returns an account's worklogs in [start, end). Jira's search
+// endpoint only yields issue IDs, so worklogs are fetched once per matching
+// issue (rather than once per worklog) and both search and worklog responses
+// are paginated.
+func SearchWorklogs(accountID string, start, end time.Time) (WorklogSearchResult, error) {
+	if strings.TrimSpace(accountID) == "" {
+		return WorklogSearchResult{}, fmt.Errorf("account ID is required")
+	}
+
+	jql := fmt.Sprintf(
+		`worklogAuthor = %q AND worklogDate >= %q AND worklogDate < %q`,
+		accountID,
+		start.Format("2006-01-02"),
+		end.Format("2006-01-02"),
+	)
+
+	issueIDs, err := searchIssueIDs(jql)
+	if err != nil {
+		return WorklogSearchResult{}, err
+	}
+
+	result := WorklogSearchResult{}
+	for _, issueID := range issueIDs {
+		issue, err := GetIssue(issueID)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("fetching issue %s: %w", issueID, err))
+			continue
+		}
+
+		entries, err := worklogsForIssue(issue.ID, issue.Key, summaryOfIssue(*issue), accountID, start, end)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("fetching worklogs for %s: %w", issue.Key, err))
+			continue
+		}
+		result.Entries = append(result.Entries, entries...)
+	}
+
+	return result, nil
+}
+
+func searchIssueIDs(jql string) ([]string, error) {
+	var issueIDs []string
+	nextPageToken := ""
+	for {
+		payload := map[string]interface{}{"jql": jql, "maxResults": 100}
+		if nextPageToken != "" {
+			payload["nextPageToken"] = nextPageToken
+		}
+		body, _ := json.Marshal(payload)
+		resp, err := doJSON(http.MethodPost, baseURL+"/rest/api/3/search/jql", body)
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Issues []struct {
+				ID string `json:"id"`
+			} `json:"issues"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		if err := json.Unmarshal(resp, &page); err != nil {
+			return nil, err
+		}
+		for _, issue := range page.Issues {
+			issueIDs = append(issueIDs, issue.ID)
+		}
+		if page.NextPageToken == "" {
+			return issueIDs, nil
+		}
+		nextPageToken = page.NextPageToken
+	}
+}
+
+func worklogsForIssue(issueID, issueKey, summary, accountID string, start, end time.Time) ([]WorklogEntry, error) {
+	const pageSize = 100
+	var entries []WorklogEntry
+	for startAt := 0; ; {
+		path := fmt.Sprintf("%s/rest/api/3/issue/%s/worklog?startAt=%d&maxResults=%d", baseURL, url.PathEscape(issueID), startAt, pageSize)
+		body, err := doJSON(http.MethodGet, path, nil)
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			StartAt  int `json:"startAt"`
+			MaxResults int `json:"maxResults"`
+			Total    int `json:"total"`
+			Worklogs []struct {
+				Author struct {
+					AccountID string `json:"accountId"`
+				} `json:"author"`
+				Started          string `json:"started"`
+				TimeSpentSeconds int    `json:"timeSpentSeconds"`
+			} `json:"worklogs"`
+		}
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, err
+		}
+		for _, worklog := range page.Worklogs {
+			if worklog.Author.AccountID != accountID {
+				continue
+			}
+			started, err := time.Parse("2006-01-02T15:04:05.999-0700", worklog.Started)
+			if err != nil {
+				return nil, fmt.Errorf("parsing worklog date %q: %w", worklog.Started, err)
+			}
+			started = started.In(start.Location())
+			if started.Before(start) || !started.Before(end) {
+				continue
+			}
+			entries = append(entries, WorklogEntry{Started: started, IssueKey: issueKey, IssueSummary: summary, TimeSpentSeconds: worklog.TimeSpentSeconds})
+		}
+		startAt += len(page.Worklogs)
+		if startAt >= page.Total || len(page.Worklogs) == 0 {
+			return entries, nil
+		}
+	}
+}
+
+func summaryOfIssue(issue jira.Issue) string {
+	if issue.Fields == nil {
+		return ""
+	}
+	return issue.Fields.Summary
 }
 
 // GetIssue fetches a single issue by ID (or key) with the fields the CLI uses.

@@ -81,6 +81,7 @@ func init() {
 	rootCmd.AddCommand(commentCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(editCmd)
+	rootCmd.AddCommand(timesheetCmd)
 }
 
 func isAuthCommand(cmd *cobra.Command) bool {
